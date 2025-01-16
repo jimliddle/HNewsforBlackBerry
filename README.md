@@ -13,5 +13,5 @@ Features:
 - Clicked aritcle links are opened in a new tab
 - FrogFind can be turned on which formats the documents for readibility (useful for web pages that won't load in the older BB Browser) - note this uses http
 
-TO use load the file to phone, open within the default BB Browser and bookmark. 
+T use load the file to phone, open within the default BB Browser and bookmark. 
 It should also work with other browsers such as PaperBird, Chrome and Fennec (that work with BlackBerry)
