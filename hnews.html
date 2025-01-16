@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hacker News Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f6f6ef;
+            color: #333;
+        }
+        h1 {
+            font-size: 20px;
+            color: #ff6600;
+            text-align: center;
+            margin: 10px;
+        }
+        #search-container {
+            text-align: center;
+            margin: 10px 0;
+        }
+        #search-box {
+            padding: 8px;
+            width: 80%;
+            max-width: 600px;
+            font-size: 16px;
+            margin: 10px auto;
+            display: block;
+            height: 35px;
+            border: 1px solid #ccc;
+        }
+        .button-container {
+            text-align: center;
+        }
+        button {
+            display: inline-block;
+            margin: 5px;
+            padding: 8px 15px;
+            font-size: 14px;
+            background-color: #ff6600;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        button:hover {
+            background-color: #e65b00;
+        }
+        #content {
+            padding: 10px;
+            text-align: left;
+        }
+        .story {
+            margin-bottom: 15px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 10px;
+        }
+        .story-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            text-decoration: none;
+            color: #000;
+        }
+        .story-title:hover {
+            text-decoration: underline;
+        }
+        .story-meta {
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 5px;
+        }
+        .comments {
+            margin-top: 5px;
+            padding-left: 10px;
+            font-size: 12px;
+            color: #555;
+            border-left: 2px solid #ccc;
+        }
+        .comment {
+            margin-bottom: 10px;
+        }
+        .comment-author {
+            font-weight: bold;
+        }
+        .comment-text {
+            margin-top: 5px;
+        }
+        #optimize-checkbox-container {
+            text-align: center;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Hacker News for Blackberry</h1>
+    <div id="search-container">
+        <input type="text" id="search-box" placeholder="Search for stories...">
+        <div class="button-container">
+            <button onclick="performSearch()">Search</button>
+            <button onclick="showTopStories()">Top Stories</button>
+        </div>
+    </div>
+    <div id="optimize-checkbox-container">
+        <label>
+            <input type="checkbox" id="optimize-links" onchange="updateLinks()">
+            Optimize links for BB using FrogFind (uses http)
+        </label>
+    </div>
+    <div id="content">Loading top stories...</div>
+    <button id="load-more-btn" onclick="loadMore()" style="display: none;">Load More</button>
+
+    <script>
+        var apiUrl = "https://hacker-news.firebaseio.com/v0/";
+        var storyIds = [];
+        var currentPage = 0;
+        var storiesPerPage = 10;
+        var isSearching = false;
+
+        function fetchTopStories() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", apiUrl + "topstories.json", true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        storyIds = JSON.parse(xhr.responseText);
+                        document.getElementById("content").innerHTML = ""; // Clear "Loading stories..."
+                        loadMore();
+                    } else {
+                        document.getElementById("content").innerHTML = "Failed to load stories. Please try again.";
+                    }
+                }
+            };
+            xhr.send();
+        }
+
+        function loadMore() {
+            if (isSearching) return;
+
+            var start = currentPage * storiesPerPage;
+            var end = start + storiesPerPage;
+            var storiesToLoad = storyIds.slice(start, end);
+
+            if (storiesToLoad.length === 0) {
+                document.getElementById("load-more-btn").style.display = "none";
+                return;
+            }
+
+            currentPage++;
+            for (var i = 0; i < storiesToLoad.length; i++) {
+                fetchStory(storiesToLoad[i]);
+            }
+
+            document.getElementById("load-more-btn").style.display = "block";
+        }
+
+        function fetchStory(id) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", apiUrl + "item/" + id + ".json", true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        var story = JSON.parse(xhr.responseText);
+                        displayStory(story);
+                    }
+                }
+            };
+            xhr.send();
+        }
+
+        function displayStory(story) {
+            var content = document.getElementById("content");
+            var storyDiv = document.createElement("div");
+            storyDiv.className = "story";
+
+            var optimizeLinks = document.getElementById("optimize-links").checked;
+            var encodedUrl = story.url ? encodeURIComponent(story.url) : "#";
+            var storyUrl = optimizeLinks
+                ? "http://frogfind.de/read.php?a=" + encodedUrl
+                : story.url;
+
+            storyDiv.innerHTML =
+                '<a class="story-title" href="' +
+                storyUrl +
+                '" target="_blank" data-original-url="' +
+                story.url +
+                '">' +
+                story.title +
+                '</a>' +
+                '<div class="story-meta">Score: ' +
+                (story.score || 0) +
+                " | By: " +
+                story.by +
+                " | " +
+                (story.descendants || 0) +
+                " comments</div>" +
+                '<button onclick="toggleComments(' +
+                story.id +
+                ', this)">View Comments</button>' +
+                '<div class="comments" id="comments-' +
+                story.id +
+                '" style="display: none;"></div>';
+
+            content.appendChild(storyDiv);
+        }
+
+        function toggleComments(storyId, button) {
+            var commentsDiv = document.getElementById("comments-" + storyId);
+            if (commentsDiv.style.display === "none") {
+                commentsDiv.style.display = "block";
+                fetchComments(storyId, commentsDiv);
+                button.innerText = "Hide Comments";
+            } else {
+                commentsDiv.style.display = "none";
+                button.innerText = "View Comments";
+            }
+        }
+
+        function fetchComments(storyId, parentDiv) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", apiUrl + "item/" + storyId + ".json", true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    var story = JSON.parse(xhr.responseText);
+                    var commentIds = story.kids || [];
+                    for (var i = 0; i < Math.min(commentIds.length, 10); i++) {
+                        fetchComment(commentIds[i], parentDiv);
+                    }
+                }
+            };
+            xhr.send();
+        }
+
+        function fetchComment(commentId, parentDiv) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", apiUrl + "item/" + commentId + ".json", true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    var comment = JSON.parse(xhr.responseText);
+                    if (comment && comment.text) {
+                        var commentDiv = document.createElement("div");
+                        commentDiv.className = "comment";
+                        commentDiv.innerHTML =
+                            '<div class="comment-author">' +
+                            (comment.by || "Anonymous") +
+                            "</div>" +
+                            '<div class="comment-text">' +
+                            comment.text +
+                            "</div>";
+                        parentDiv.appendChild(commentDiv);
+                    }
+                }
+            };
+            xhr.send();
+        }
+
+        function updateLinks() {
+            var optimizeLinks = document.getElementById("optimize-links").checked;
+            var links = document.querySelectorAll(".story-title");
+            for (var i = 0; i < links.length; i++) {
+                var originalUrl = links[i].getAttribute("data-original-url");
+                if (originalUrl) {
+                    var encodedUrl = encodeURIComponent(originalUrl);
+                    links[i].href = optimizeLinks
+                        ? "http://frogfind.de/read.php?a=" + encodedUrl
+                        : originalUrl;
+                }
+            }
+        }
+
+        function performSearch() {
+            var searchTerm = document.getElementById("search-box").value.toLowerCase();
+            if (!searchTerm) {
+                showTopStories();
+                return;
+            }
+
+            isSearching = true;
+            document.getElementById("content").innerHTML = "Searching...";
+            document.getElementById("load-more-btn").style.display = "none";
+
+            var searchUrl = "https://hn.algolia.com/api/v1/search?query=" + encodeURIComponent(searchTerm);
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", searchUrl, true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        var response = JSON.parse(xhr.responseText);
+                        document.getElementById("content").innerHTML = "";
+                        
+                        if (response.hits.length === 0) {
+                            document.getElementById("content").innerHTML = "No results found.";
+                            return;
+                        }
+
+                        response.hits.forEach(function(hit) {
+                            var story = {
+                                id: hit.objectID,
+                                title: hit.title,
+                                url: hit.url,
+                                score: hit.points,
+                                by: hit.author,
+                                descendants: hit.num_comments
+                            };
+                            displayStory(story);
+                        });
+                    } else {
+                        document.getElementById("content").innerHTML = "Search failed. Please try again.";
+                    }
+                }
+            };
+            xhr.send();
+        }
+
+        function showTopStories() {
+            isSearching = false;
+            currentPage = 0;
+            document.getElementById("content").innerHTML = "Loading top stories...";
+            document.getElementById("load-more-btn").style.display = "none";
+            document.getElementById("search-box").value = "";
+            fetchTopStories();
+        }
+
+        // Add event listener for Enter key in search box
+        document.getElementById("search-box").addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                performSearch();
+            }
+        });
+
+        // Initial load
+        showTopStories();
+    </script>
+</body>
+</html>
